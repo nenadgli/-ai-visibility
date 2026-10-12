@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+// Javne vrednosti (publishable ključ je namenjen frontendu); env ih može pregaziti
+const URL = (import.meta.env.VITE_SUPABASE_URL || "https://prfcnhlunpnewankxhdn.supabase.co").trim();
+const KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_J2uh64F7GzcAgb7qHO2RcQ_DfvZCKPu").trim();
+export const supabase = createClient(URL, KEY);
 
 export type Provider = "chatgpt" | "claude" | "gemini" | "perplexity" | "google_aio";
 
