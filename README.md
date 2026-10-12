@@ -49,7 +49,7 @@ npm run dev             # lokalno
 npm run build           # dist/ za Vercel ili bilo koji statički hosting
 ```
 
-Na Vercelu: root `web`, build `npm run build`, output `dist`, env `VITE_SUPABASE_URL` i `VITE_SUPABASE_ANON_KEY`.
+Na Vercelu: **Root Directory = `web`** (Settings → Build and Deployment). Ostalo čita iz `web/vercel.json`. Env: `VITE_SUPABASE_URL` i `VITE_SUPABASE_ANON_KEY`.
 
 ## Kako radi obrada
 
