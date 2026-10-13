@@ -22,6 +22,11 @@ function widen(text: string, s: number, e: number): [number, number] {
   return [i, e];
 }
 
+// putanja stranice (npr. /rs/zene/obuca/filter/...) — pokazuje KOJU stranicu je AI otvorio
+function pathOf(url: string) {
+  try { const u = new URL(url); return decodeURIComponent(u.pathname + u.search) || "/"; } catch { return url; }
+}
+
 function brandRanges(text: string, brands: Brand[]) {
   const out: { s: number; e: number; brand: Brand }[] = [];
   for (const b of brands) {
@@ -107,6 +112,7 @@ export default function Trace() {
       <span className="d">{s.cited && <b style={{ color: "var(--cite)" }}>[{citeNo.get(s.id)}] </b>}{s.domain}</span>
       <span className="n">{s.cited ? `${s.citation_count}× citiran` : s.retrieved_rank ? `#${s.retrieved_rank}` : ""}</span>
       {s.title && s.title !== s.domain && <span className="t">{s.title}</span>}
+      <span className="t faint" title={s.url}>{pathOf(s.url)}</span>
     </a>
   );
 
