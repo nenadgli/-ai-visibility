@@ -88,7 +88,7 @@ Za svaki pomenuti brend odredi:
 - sentiment: "positive" | "neutral" | "negative" | "mixed" (kako je brend predstavljen)
 - recommended: true ako odgovor brend aktivno preporučuje korisniku
 - reasons: do 4 kratka razloga/atributa zbog kojih AI pominje brend (npr. "povoljne cene", "širok izbor", "brza dostava"), na srpskom
-other_brands: ostali nazivi prodavnica/brendova/sajtova koji se preporučuju ili pominju u odgovoru (samo nazivi, bez duplikata).
+other_brands: SAMO druge prodavnice, online shopovi, retail lanci i marketplace sajtovi koji se pominju kao mesto za kupovinu (npr. "Office Shoes", "Shoppster"). NE navodi modne/proizvodne brendove koje te prodavnice prodaju (npr. Nike, Diesel, Levi's, Tommy Hilfiger, BOSS) niti matične kompanije. Samo nazivi, bez duplikata; prazna lista ako ih nema.
 
 Odgovor:
 """${answer.slice(0, 12000)}"""`;
