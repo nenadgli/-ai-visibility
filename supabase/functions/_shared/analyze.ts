@@ -76,7 +76,7 @@ export function detectMentions(answer: string, brands: Brand[], citedDomains: Se
 export async function judge(answer: string, prompt: string, brands: Brand[], hits: MentionHit[]): Promise<{ hits: MentionHit[]; discovered: string[] }> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key || !answer.trim()) return { hits, discovered: [] };
-  const model = Deno.env.get("ANALYSIS_MODEL") ?? "gemini-2.5-flash";
+  const model = Deno.env.get("ANALYSIS_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3-flash-preview";
   const mentioned = hits.map((h) => brands.find((b) => b.id === h.brand_id)!.name);
   const known = brands.flatMap((b) => [b.name, ...b.aliases]);
   const instr = `Analiziraš odgovor AI asistenta na pitanje korisnika. Vrati JSON.
@@ -126,7 +126,7 @@ Odgovor:
     });
     if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`);
     const data = await res.json();
-    const txt = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "{}";
+    const txt = data.candidates?.[0]?.content?.parts?.filter((p: any) => p.text && !p.thought).map((p: any) => p.text).join("") ?? "{}";
     const out = JSON.parse(txt);
     const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
     const knownN = new Set(known.map(norm));
