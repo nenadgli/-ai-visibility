@@ -1,0 +1,30 @@
+name: Feed X-ray
+
+# Svakog jutra skenira sve feedove iz tabele feeds i upisuje snimak u feed_snapshots.
+# Secrets: SUPABASE_SERVICE_ROLE_KEY (Supabase → Project Settings → API keys).
+on:
+  schedule:
+    - cron: "17 4 * * *" # 04:17 UTC ≈ 06:17 po beogradskom vremenu
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feed-xray
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Skeniranje feedova
+        env:
+          SUPABASE_URL: https://prfcnhlunpnewankxhdn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node tools/feed-xray/scan.mjs --all --sample 30

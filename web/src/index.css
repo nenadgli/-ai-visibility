@@ -112,7 +112,7 @@ textarea { width: 100%; min-height: 110px; resize: vertical; line-height: 1.45; 
 .panel + .panel, .stack > * + * { margin-top: 16px; }
 .panel h2 { margin-bottom: 4px; }
 .panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; }
 .grid2 > .panel + .panel { margin-top: 0; }
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
@@ -187,3 +187,25 @@ tr.click:hover td { background: var(--sunk); }
 .progress { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
 .progress > i { display: block; height: 100%; background: var(--own); transition: width .4s; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- feed x-ray ---------- */
+.xr-top { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 16px; }
+.xr-top > .panel + .panel { margin-top: 0; }
+.xr-score-n { display: flex; align-items: baseline; gap: 4px; margin: 4px 0 10px; }
+.xr-score-n b { font-size: 44px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; }
+.xr-score-n span { color: var(--muted); }
+.xr-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px 18px; align-content: center; }
+.xr-kpi b { display: block; font-size: 20px; font-weight: 600; }
+.xr-kpi span { color: var(--muted); font-size: 12px; }
+.xr-ins { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-width: 90ch; }
+.xr-share { display: flex; align-items: center; gap: 8px; }
+.xr-share .bar { flex: 1; }
+.xr-share span { font-size: 12px; min-width: 42px; text-align: right; }
+.xr-detail { display: flex; flex-direction: column; gap: 8px; max-width: 90ch; }
+.sev { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.sev.crit { color: var(--neg); }
+.sev.high { color: var(--cite); }
+.sev.med, .sev.low { color: var(--muted); }
+.sev.ok { color: var(--pos); }
+code { font-size: 12px; background: var(--sunk); padding: 1px 5px; border-radius: 3px; }
+@media (max-width: 860px) { .xr-top { grid-template-columns: 1fr; } }
