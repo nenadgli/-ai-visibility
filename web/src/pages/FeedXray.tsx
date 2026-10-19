@@ -19,7 +19,7 @@ interface SnapData {
   categories: CatRow[];
   disc_buckets: { label: string; items: number }[];
   price_bands: { label: string; items: number }[];
-  access: { tested_url: string | null; bots: Bot[]; files: Record<string, number> };
+  access: { tested_url: string | null; browser_status?: number; bots: Bot[]; files: Record<string, number> };
 }
 interface Snapshot { id: string; scanned_at: string; score: number; items: number; data: SnapData }
 
@@ -167,6 +167,10 @@ export default function FeedXray() {
           </div>
           {d.passed.length > 0 && <p className="small muted" style={{ marginTop: 10 }}>Provere bez nalaza: {d.passed.map((t) => `„${t}“`).join(", ")}.</p>}
         </section>
+
+        {!bots.length && d.access?.browser_status != null && (
+          <p className="small muted">Provera AI botova preskočena: sajt je sa IP adrese skenera blokirao i običan browser ({d.access.browser_status || "greška"}).</p>
+        )}
 
         {bots.length > 0 && (
           <section className="panel">

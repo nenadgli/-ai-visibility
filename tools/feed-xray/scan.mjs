@@ -4,11 +4,14 @@
 //
 //   node tools/feed-xray/scan.mjs --feed <url|putanja> --site <https://sajt/> [--sample 30] [--out snapshot.json]
 //   Sa --push i env SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY + --feed-id upisuje snimak u feed_snapshots.
+//   --all: skenira sve feedove iz tabele feeds i upisuje snimke (za dnevno pokretanje, .github/workflows/feed-xray.yml).
 //
 // Bez zavisnosti (Node 22+). Feed od ~60 MB se obradi za par sekundi.
 // Iza proksija: NODE_USE_ENV_PROXY=1 (Node 22.21+) da fetch koristi HTTPS_PROXY.
 
 import { readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((a, v, i, all) => {
@@ -16,6 +19,21 @@ const args = Object.fromEntries(
     return a;
   }, []),
 );
+if (args.all) {
+  const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) { console.error("--all traži SUPABASE_URL i SUPABASE_SERVICE_ROLE_KEY"); process.exit(1); }
+  const r = await fetch(`${url}/rest/v1/feeds?select=id,name,url,site_url`, { headers: { apikey: key, authorization: `Bearer ${key}` } });
+  if (!r.ok) { console.error("Čitanje feedova nije uspelo:", r.status, await r.text()); process.exit(1); }
+  let failed = 0;
+  for (const f of await r.json()) {
+    console.error(`— ${f.name}`);
+    const a = ["--feed", f.url, "--push", "--feed-id", f.id, "--sample", String(args.sample ?? 30)];
+    if (f.site_url) a.push("--site", f.site_url);
+    // svaki feed u svom procesu: 60 MB XML-a se ne drži u memoriji preko celog niza
+    try { execFileSync(process.execPath, [fileURLToPath(import.meta.url), ...a], { stdio: "inherit" }); } catch { failed++; }
+  }
+  process.exit(failed ? 1 : 0);
+}
 if (!args.feed) {
   console.error("Upotreba: scan.mjs --feed <url|putanja> [--site <url>] [--sample 30] [--out file.json] [--push --feed-id <uuid>]");
   process.exit(1);
@@ -205,7 +223,9 @@ if (args.site !== undefined) {
   const site = String(args.site).replace(/\/?$/, "/");
   const origin = new URL(site).origin;
   access.tested_url = items.find((d) => d.link)?.link ?? site;
-  for (const [name, purpose, kind, ua] of BOTS) {
+  // kontrola: ako sajt blokira i običan browser sa ove IP adrese (npr. GitHub runner), rezultati botova ništa ne znače
+  try { access.browser_status = (await fetch(access.tested_url, { headers: { "user-agent": BROWSER_UA }, redirect: "manual" })).status; } catch { access.browser_status = 0; }
+  if (access.browser_status >= 200 && access.browser_status < 400) for (const [name, purpose, kind, ua] of BOTS) {
     let status = 0;
     try { status = (await fetch(access.tested_url, { headers: { "user-agent": ua }, redirect: "manual" })).status; } catch { /* */ }
     access.bots.push({ name, purpose, kind, status });

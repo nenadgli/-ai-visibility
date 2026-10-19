@@ -75,6 +75,8 @@ node tools/feed-xray/scan.mjs \
   --push --feed-id <id iz tabele feeds>
 ```
 
+**Dnevno skeniranje:** `.github/workflows/feed-xray.yml` svakog jutra (04:17 UTC) pokreće `scan.mjs --all`, koji skenira sve feedove iz tabele `feeds`. Potreban je GitHub secret `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys). Ručno pokretanje: Actions → Feed X-ray → Run workflow. Novi klijent = novi red u `feeds`, ništa drugo.
+
 Bez `--push` snimak ide na stdout (ili u `--out fajl.json`). `--site` uključuje proveru uzorka proizvodnih stranica (veličine na sajtu vs. feed, Magento `jsonConfig`) i test pristupa AI botova (User-Agent sa naše IP adrese, rezultat treba potvrditi u Cloudflareu). Svaki snimak se čuva, pa se kasnije može pratiti promena kroz vreme.
 
 ## Testovi
