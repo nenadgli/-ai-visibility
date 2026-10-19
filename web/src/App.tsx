@@ -12,6 +12,7 @@ import Sources from "./pages/Sources";
 import Fanout from "./pages/Fanout";
 import Runs from "./pages/Runs";
 import Settings from "./pages/Settings";
+import FeedXray from "./pages/FeedXray";
 
 function Mark() {
   return (
@@ -40,6 +41,7 @@ function Shell() {
           <NavLink to="/odgovori">Odgovori i trag</NavLink>
           <NavLink to="/izvori">Izvori</NavLink>
           <NavLink to="/pretrage">Pretrage</NavLink>
+          <NavLink to="/feed">Feed X-ray</NavLink>
           <NavLink to="/upiti">Upiti</NavLink>
           <NavLink to="/pokretanja">Pokretanja</NavLink>
           <NavLink to="/podesavanja">Brendovi i klijenti</NavLink>
@@ -58,6 +60,7 @@ function Shell() {
             <Route path="/odgovori/:id" element={<Trace />} />
             <Route path="/izvori" element={<Sources />} />
             <Route path="/pretrage" element={<Fanout />} />
+            <Route path="/feed" element={<FeedXray />} />
             <Route path="/upiti" element={<Prompts />} />
             <Route path="/pokretanja" element={<Runs />} />
             <Route path="/podesavanja" element={<Settings />} />

@@ -58,6 +58,25 @@ Na Vercelu: **Root Directory = `web`** (Settings → Build and Deployment). Osta
 3. Prepoznavanje brendova je pravilima (nazivi, alijasi, domeni, srpski padeži: Zara/Zare/Zari), a ton, preporuka, razlozi i nepraćeni brendovi preko Geminija.
 4. Ako ima još posla, funkcija pozove samu sebe. 429/5xx se ponavlja do 3 puta.
 
+## Feed X-ray
+
+Stranica **Feed X-ray** pokazuje šta product feed klijenta govori o kvalitetu podataka (ono što Google i AI agenti vide) i o samom asortimanu: skor 0–100, problemi po težini sa primerima, pristup AI botova, popusti po brendu i kategoriji, cenovni razredi i popunjenost polja.
+
+Feed od 50+ MB je prevelik za edge funkciju, pa skeniranje radi skripta bez zavisnosti (Node 22+):
+
+```bash
+# 1. jednom: red u tabeli feeds (workspace, url feeda, url sajta)
+# 2. skeniranje + upis snimka
+NODE_USE_ENV_PROXY=1 \
+SUPABASE_URL=https://prfcnhlunpnewankxhdn.supabase.co SUPABASE_SERVICE_ROLE_KEY=... \
+node tools/feed-xray/scan.mjs \
+  --feed https://fashion-assets.fashionandfriends.com/media/feed/product-feed-rs.xml \
+  --site https://www.fashionandfriends.com/rs/ --sample 30 \
+  --push --feed-id <id iz tabele feeds>
+```
+
+Bez `--push` snimak ide na stdout (ili u `--out fajl.json`). `--site` uključuje proveru uzorka proizvodnih stranica (veličine na sajtu vs. feed, Magento `jsonConfig`) i test pristupa AI botova (User-Agent sa naše IP adrese, rezultat treba potvrditi u Cloudflareu). Svaki snimak se čuva, pa se kasnije može pratiti promena kroz vreme.
+
 ## Testovi
 
 ```bash
