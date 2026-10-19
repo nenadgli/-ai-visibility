@@ -209,3 +209,7 @@ tr.click:hover td { background: var(--sunk); }
 .sev.ok { color: var(--pos); }
 code { font-size: 12px; background: var(--sunk); padding: 1px 5px; border-radius: 3px; }
 @media (max-width: 860px) { .xr-top { grid-template-columns: 1fr; } }
+.xr-files { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.xr-file { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr) auto; gap: 8px 14px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); }
+.xr-file code { word-break: break-all; }
+@media (max-width: 860px) { .xr-file { grid-template-columns: 1fr; justify-items: start; } }

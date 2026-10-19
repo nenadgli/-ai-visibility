@@ -9,16 +9,12 @@
 // Bez zavisnosti (Node 22+). Feed od ~60 MB se obradi za par sekundi.
 // Iza proksija: NODE_USE_ENV_PROXY=1 (Node 22.21+) da fetch koristi HTTPS_PROXY.
 
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { BROWSER_UA, loadText, parseArgs, parseItems, parseMagentoSizes } from "../lib/feed.mjs";
 
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((a, v, i, all) => {
-    if (v.startsWith("--")) a.push([v.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
-    return a;
-  }, []),
-);
+const args = parseArgs(process.argv.slice(2));
 if (args.all) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) { console.error("--all traži SUPABASE_URL i SUPABASE_SERVICE_ROLE_KEY"); process.exit(1); }
@@ -39,30 +35,19 @@ if (!args.feed) {
   process.exit(1);
 }
 const SAMPLE = Number(args.sample ?? 30);
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
 
 // ---------------------------------------------------------------- učitavanje i parsiranje
-const xml = /^https?:/.test(args.feed)
-  ? await (await fetch(args.feed, { headers: { "user-agent": BROWSER_UA } })).text()
-  : await readFile(args.feed, "utf8");
-
-const decode = (s) =>
-  s.replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
-    .trim();
-
+const parsed = parseItems(await loadText(args.feed));
+const fieldNames = parsed.fieldNames;
+// Feed sa varijantama ima jedan red po veličini: asortiman i provere rade nad proizvodima (prvi red grupe),
+// a veličine po proizvodu skupljamo iz svih redova grupe.
+const groupKey = (d) => d.item_group_id || d.id;
+const feedSizes = new Map();
 const items = [];
-const fieldNames = new Set();
-for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
-  const it = { extra_images: [] };
-  for (const f of m[1].matchAll(/<((?:g:)?[a-z_0-9]+)>([\s\S]*?)<\/\1>/g)) {
-    const key = f[1].replace(/^g:/, "");
-    const val = decode(f[2]);
-    fieldNames.add(key);
-    if (key === "additional_image_link") { if (val) it.extra_images.push(val); }
-    else it[key] = val;
-  }
-  items.push(it);
+for (const d of parsed.items) {
+  const k = groupKey(d);
+  if (!feedSizes.has(k)) { feedSizes.set(k, new Set()); items.push(d); }
+  if (d.size) feedSizes.get(k).add(d.size);
 }
 const N = items.length;
 if (!N) { console.error("Feed nema <item> elemenata."); process.exit(1); }
@@ -164,42 +149,30 @@ if (args.site !== undefined && SAMPLE > 0 && configurable.length) {
   for (const d of sample) {
     try {
       const h = await (await fetch(d.link, { headers: { "user-agent": BROWSER_UA } })).text();
-      const sizes = parseSizes(h);
+      const sizes = parseMagentoSizes(h);
       if (!sizes) continue;
       variantCheck.fetched++;
       siteSizes.push(sizes.length);
-      if (sizes.length > 1) {
+      const inFeed = feedSizes.get(groupKey(d));
+      if (sizes.some((z) => !inFeed.has(z))) {
         variantCheck.more_on_site++;
-        if (variantCheck.examples.length < 5) variantCheck.examples.push({ ...ex(d), feed_size: d.size, site_sizes: sizes });
+        if (variantCheck.examples.length < 5) variantCheck.examples.push({ ...ex(d), feed_size: [...inFeed].join(", "), site_sizes: sizes });
       }
     } catch { /* preskoči */ }
   }
   variantCheck.avg_site_sizes = Math.round(avg(siteSizes) * 10) / 10;
 }
-if (variantCheck.fetched) {
+variantCheck.rows = parsed.items.length;
+if (variantCheck.fetched && variantCheck.more_on_site) {
   const share = variantCheck.fetched ? variantCheck.more_on_site / variantCheck.fetched : 0;
   checks.push({
-    id: "variants", severity: "critical", title: "Feed prikazuje samo jednu veličinu po proizvodu",
-    why: `Na sajtu proizvod ima više veličina (u proseku ${variantCheck.avg_site_sizes}), a feed navodi samo jednu i nema item_group_id. Agent zato misli da postoji samo jedan broj i na pitanje „imate li 42?“ odgovara pogrešno.`,
+    id: "variants", severity: "critical", title: "Feed ne prikazuje sve veličine",
+    why: `Na sajtu proizvod ima više veličina (u proseku ${variantCheck.avg_site_sizes}), a feed za većinu navodi samo jednu (nema red po veličini sa item_group_id). Agent zato misli da postoji samo jedan broj i na pitanje „imate li 42?“ odgovara pogrešno.`,
     fix: "Izvoziti jedan red po varijanti (veličini) sa zajedničkim item_group_id.",
     affected: Math.round(share * configurable.length), base: N, share: pct(Math.round(share * configurable.length)),
     examples: variantCheck.examples,
-    note: `Procena iz uzorka od ${variantCheck.fetched} proizvodnih stranica (${variantCheck.more_on_site} ima više veličina nego feed).`,
+    note: `Procena iz uzorka od ${variantCheck.fetched} proizvodnih stranica (${variantCheck.more_on_site} ima veličina kojih nema u feedu).`,
   });
-}
-function parseSizes(html) {
-  const i = html.indexOf('"jsonConfig":');
-  if (i < 0) return null;
-  let j = html.indexOf("{", i), depth = 0, k = j;
-  for (; k < html.length; k++) {
-    if (html[k] === "{") depth++;
-    else if (html[k] === "}" && --depth === 0) break;
-  }
-  try {
-    const cfg = JSON.parse(html.slice(j, k + 1));
-    const size = Object.values(cfg.attributes ?? {}).find((a) => a.code === "size");
-    return size ? size.options.map((o) => o.label) : [];
-  } catch { return null; }
 }
 
 // ---------------------------------------------------------------- pristup AI agenata

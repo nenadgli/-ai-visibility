@@ -22,6 +22,14 @@ interface SnapData {
   access: { tested_url: string | null; browser_status?: number; bots: Bot[]; files: Record<string, number> };
 }
 interface Snapshot { id: string; scanned_at: string; score: number; items: number; data: SnapData }
+interface AgentFeed {
+  id: string; name: string; token: string; active: boolean; last_items: number | null; last_built_at: string | null; last_checked_at: string | null; last_error: string | null;
+  stats: { products: number; rows: number; gpc_mapped: number; titles_fixed: number; cats_fixed: number; variant_products: number; sizes_cached: number } | null;
+}
+const AGENT_FILES = [
+  { file: "google-supplemental.xml.gz", label: "Google dopunski feed", hint: "Merchant Center → dodatni izvor podataka; klijentov feed ostaje glavni" },
+  { file: "google.xml.gz", label: "Pun feed (sa veličinama)", hint: "zamenjuje klijentov feed kao glavni izvor" },
+];
 
 const SEV: Record<Check["severity"], { label: string; icon: string; cls: string }> = {
   critical: { label: "Kritično", icon: "●", cls: "sev crit" },
@@ -41,10 +49,12 @@ export default function FeedXray() {
   const [open, setOpen] = useState<string | null>(null);
   const [allBrands, setAllBrands] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [agentFeeds, setAgentFeeds] = useState<AgentFeed[]>([]);
 
   useEffect(() => {
     if (!ws) return;
     setLoading(true);
+    supabase.from("agent_feeds").select("*").eq("workspace_id", ws.id).order("created_at").then(({ data }) => setAgentFeeds(data ?? []));
     supabase.from("feeds").select("*").eq("workspace_id", ws.id).order("created_at").then(({ data }) => {
       setFeeds(data ?? []);
       setFeedId(data?.[0]?.id ?? null);
@@ -116,6 +126,8 @@ export default function FeedXray() {
             <Kpi v={`${n0(s.median_price)} ${cur}`} l="medijalna cena" />
           </section>
         </div>
+
+        {agentFeeds.length > 0 && <AgentFeeds feeds={agentFeeds} />}
 
         {insights.length > 0 && (
           <section className="panel">
@@ -283,6 +295,47 @@ export default function FeedXray() {
         </div>
       </div>
     </>
+  );
+}
+
+function AgentFeeds({ feeds }: { feeds: AgentFeed[] }) {
+  const url = (token: string, file: string) => supabase.storage.from("feeds").getPublicUrl(`${token}/${file}`).data.publicUrl;
+  return (
+    <section className="panel">
+      <h2>Naši ispravljeni feedovi</h2>
+      <p className="sub">Generišu se svakog sata iz klijentovog feeda. Ako je ulaz pokvaren, ostaje poslednja ispravna verzija. Izaberite „Naš Agent Feed“ gore desno za X-ray našeg feeda.</p>
+      {feeds.map((f) => {
+        const st = f.stats;
+        return (
+          <div key={f.id} className="stack">
+            <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+              <b>{f.name}</b>
+              {f.last_error ? <span className="sev crit">✕ Nije objavljeno: {f.last_error}</span>
+                : f.last_built_at ? <span className="sev ok">✓ Objavljeno {fmtDate(f.last_built_at)}</span>
+                : <span className="sev low">○ Još nije generisan (čeka prvo pokretanje)</span>}
+            </div>
+            {st && (
+              <div className="xr-kpis" style={{ marginTop: 10 }}>
+                <Kpi v={n0(st.products)} l="proizvoda" />
+                <Kpi v={n0(st.rows)} l="redova (sa veličinama)" />
+                <Kpi v={`${Math.round((100 * st.gpc_mapped) / st.products)}%`} l="sa Google kategorijom" />
+                <Kpi v={n0(st.titles_fixed)} l="ispravljenih naziva" />
+                <Kpi v={`${n0(st.sizes_cached)} / ${n0(st.products)}`} l="proizvoda sa očitanim veličinama" />
+              </div>
+            )}
+            <div className="xr-files">
+              {AGENT_FILES.map((a) => (
+                <div key={a.file} className="xr-file">
+                  <div><b>{a.label}</b><div className="small muted">{a.hint}</div></div>
+                  <code>{url(f.token, a.file)}</code>
+                  <button className="btn" onClick={() => navigator.clipboard?.writeText(url(f.token, a.file))}>Kopiraj</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
