@@ -139,7 +139,8 @@ check("img_dup", "low", "Prva dodatna slika = glavna slika",
   (d) => d.extra_images.includes(d.image_link));
 
 // ---------------------------------------------------------------- uzorak proizvodnih stranica: veličine
-const configurable = items.filter((d) => d.product_type_id === "configurable");
+// Magento označava proizvode sa varijantama; feed bez tog polja (npr. naš Agent Feed) proveravamo ceo
+const configurable = fieldNames.has("product_type_id") ? items.filter((d) => d.product_type_id === "configurable") : items;
 const variantCheck = { sampled: 0, fetched: 0, more_on_site: 0, avg_site_sizes: 0, examples: [] };
 if (args.site !== undefined && SAMPLE > 0 && configurable.length) {
   const step = Math.max(1, Math.floor(configurable.length / SAMPLE));
