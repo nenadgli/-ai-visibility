@@ -6,6 +6,7 @@
 //                               product_type, age_group. Klijentov feed ostaje glavni → nula rizika.
 //   google.xml.gz               pun feed: sve ispravke + jedan red po veličini (item_group_id) za proizvode
 //                               čije su veličine u kešu (čitaju se sa proizvodnih stranica, malo po malo).
+// Uz to puni tabelu catalog_products (katalog za ukrštanje sa AI odgovorima, migracija 006).
 //
 //   Lokalno:  node tools/agent-feed/build.mjs --source <url|fajl> [--site <url>] --out-dir <dir> [--crawl 0]
 //   Sve:      node tools/agent-feed/build.mjs --all    (tabela agent_feeds → Supabase Storage, bucket "feeds")
@@ -65,7 +66,9 @@ if (cfg.last_items && items.length < cfg.last_items * MIN_RATIO) {
 }
 
 // ---------------------------------------------------------------- ispravke po proizvodu
-const stats = { products: items.length, gpc_mapped: 0, unmapped: {}, titles_fixed: 0, cats_fixed: 0, kids: 0 };
+const stats = { products: items.length, gpc_mapped: 0, unmapped: {}, titles_fixed: 0, models_added: 0, cats_fixed: 0, kids: 0 };
+const norm = (s) => (s || "").toLowerCase().replace(/[čć]/g, "c").replace(/ž/g, "z").replace(/š/g, "s").replace(/đ/g, "d")
+  .replace(/['’]/g, "").replace(/[^a-z0-9&]+/g, " ").trim();
 
 function fixProductType(pt) {
   // Magento ponekad spoji dve putanje bez razmaka: "Muškarci > Obuća > CipeleDeca > Devojčice > Obuća"
@@ -84,6 +87,39 @@ function fixTitle(title, brand) {
   return t;
 }
 
+// Naziv modela iz opisa ("Steve Madden Possession-E ženske patike…" → "Possession-E") kad ga naziv ne pominje.
+// AI i Google traže po modelu ("Steve Madden Possession"), a Magento nazivi su opisni ("Ženske patike sa debelim đonom").
+const MODEL_STOP = new Set(["i", "sa", "za", "od", "u", "na", "bez", "logo", "logom", "original", "model"]);
+function modelFromDescription(d) {
+  const desc = (d.description || "").trim(), brand = (d.brand || "").trim();
+  if (!brand || !desc) return null;
+  const words = desc.split(/\s+/), bw = brand.split(/\s+/).length;
+  if (norm(words.slice(0, bw).join(" ")) !== norm(brand)) return null;
+  const out = [];
+  for (const w of words.slice(bw)) {
+    const c = w.replace(/[,.;:®™]+$/, "");
+    if (!c || MODEL_STOP.has(c.toLowerCase()) || !/^[A-Z0-9ČĆŽŠĐ]/.test(c)) break;
+    out.push(c);
+    if (/[,.;:]$/.test(w) || out.length >= 4) break;
+  }
+  if (out.some((p) => p.length > 12)) return null; // dugačke šifre nisu model
+  // izbaci delove koji su već u nazivu, godine kolekcije ("2019") i pakovanja ("3Pack")
+  const tw = new Set(norm(d._title).split(" "));
+  const parts = out.filter((p) => !norm(p).split(" ").every((x) => tw.has(x))
+    && !/^(19|20)\d\d$/.test(p) && !/^\d+-?pack$/i.test(p) && !p.includes(".") && !/^\d+u\d+$/i.test(p) && !/^\d{3}[A-Z]{2,3}$/.test(p));
+  if (!parts.length) return null;
+  // VELIKA SLOVA → Velika (osim rimskih brojeva i oznaka sa ciframa)
+  return parts.map((p) => p.split("-").map((x) => (/^[A-ZČĆŽŠĐ]{3,}$/.test(x) && !/^[IVX]+$/.test(x) ? x[0] + x.slice(1).toLowerCase() : x)).join("-")).join(" ");
+}
+function withModel(title, brand, model) {
+  const nb = norm(brand);
+  let rest = title.split(/\s+-\s+/).filter((p) => norm(p) !== nb).join(" - ");
+  const re = new RegExp(`(^|\\s)${brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, "i");
+  rest = rest.replace(re, " ").replace(/\s{2,}/g, " ").replace(/^[\s-]+|[\s-]+$/g, "");
+  const t = rest ? `${brand} ${model} - ${rest}` : `${brand} ${model}`;
+  return t.length <= 150 ? t : title;
+}
+
 for (const d of items) {
   const pt = fixProductType(d.product_type);
   if (pt !== d.product_type) stats.cats_fixed++;
@@ -96,6 +132,8 @@ for (const d of items) {
   d._age = TOP_TO_AGE_GROUP[parts[0]] ?? "";
   if (d._age === "kids") stats.kids++;
   d._title = fixTitle(d.title, d.brand);
+  const model = modelFromDescription(d);
+  if (model) { d._title = withModel(d._title, d.brand, model); stats.models_added++; }
   if (d._title !== d.title) stats.titles_fixed++;
   d._images = d.extra_images.filter((u) => u && u !== d.image_link).slice(0, 10);
 }
@@ -184,12 +222,24 @@ const top = Object.entries(stats.unmapped).sort((a, b) => b[1] - a[1]).slice(0, 
 stats.unmapped = Object.fromEntries(top);
 stats.bytes = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, v.length]));
 
-console.error(`Proizvoda ${items.length} · redova ${rows} (${variantProducts} sa veličinama) · Google kategorija ${stats.gpc_mapped}/${items.length} · ispravljenih naziva ${stats.titles_fixed} · kategorija ${stats.cats_fixed}`);
+console.error(`Proizvoda ${items.length} · redova ${rows} (${variantProducts} sa veličinama) · Google kategorija ${stats.gpc_mapped}/${items.length} · ispravljenih naziva ${stats.titles_fixed} (model dodat ${stats.models_added}) · kategorija ${stats.cats_fixed}`);
 if (top.length) console.error("Bez mapiranja:", top.map(([k, v]) => `${k} (${v})`).join("; "));
 
 if (db) {
   for (const [name, body] of Object.entries(files)) await db.upload("feeds", `${cfg.token}/${name}`, body, "application/gzip");
   await db.upload("feed-cache", cachePath, Buffer.from(JSON.stringify(cache)), "application/json");
+  // katalog za ukrštanje sa AI odgovorima: upsert svih proizvoda, pa brisanje onih kojih više nema.
+  // Greška ovde ne poništava objavljen feed; beleži se u stats.catalog_error.
+  try {
+    const runAt = new Date().toISOString();
+    const price = (v) => { const m = /^[\d.]+/.exec(v ?? ""); return m ? Number(m[0]) : null; };
+    await db.upsert("catalog_products", items.map((d) => ({
+      workspace_id: cfg.workspace_id, product_id: d.id, title: d._title, orig_title: d.title, description: (d.description || "").slice(0, 600),
+      brand: d.brand || null, product_type: d._pt || null, link: d.link || null, price: price(d.price), sale_price: price(d.sale_price),
+      sizes: cache[d.id]?.s ?? (d.size ? [d.size] : []), updated_at: runAt,
+    })), "workspace_id,product_id");
+    await db.remove("catalog_products", `workspace_id=eq.${cfg.workspace_id}&updated_at=lt.${encodeURIComponent(runAt)}`);
+  } catch (e) { stats.catalog_error = e.message; console.error("Katalog nije upisan:", e.message); }
   const now = new Date().toISOString();
   await db.update("agent_feeds", `id=eq.${cfg.id}`, { last_built_at: now, last_checked_at: now, last_items: items.length, last_error: null, stats });
   console.error("Objavljeno:", Object.keys(files).map((f) => db.publicUrl("feeds", `${cfg.token}/${f}`)).join("  "));
