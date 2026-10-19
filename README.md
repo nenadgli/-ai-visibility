@@ -79,6 +79,29 @@ node tools/feed-xray/scan.mjs \
 
 Bez `--push` snimak ide na stdout (ili u `--out fajl.json`). `--site` uključuje proveru uzorka proizvodnih stranica (veličine na sajtu vs. feed, Magento `jsonConfig`) i test pristupa AI botova (User-Agent sa naše IP adrese, rezultat treba potvrditi u Cloudflareu). Svaki snimak se čuva, pa se kasnije može pratiti promena kroz vreme.
 
+## Agent Feed
+
+Od klijentovog feeda pravimo ispravljen feed i objavljujemo ga u Supabase Storage (javni bucket `feeds`, putanja sa nasumičnim tokenom). Klijentov feed je ulaz i Magento ga sam osvežava, pa naš feed prati promene bez ičega sa njihove strane.
+
+| Fajl | Šta je | Kako se kači |
+|---|---|---|
+| `google-supplemental.xml.gz` | samo `g:id` + ispravke: Google kategorija, naziv, product_type, age_group | Merchant Center → dodatni izvor podataka; klijentov feed ostaje glavni (nula rizika) |
+| `google.xml.gz` | pun feed: sve ispravke + jedan red po veličini (`item_group_id`) | zamenjuje klijentov feed kao glavni |
+
+- Kategorije: `tools/agent-feed/taxonomy.mjs` (Magento kategorija → Google taxonomy ID). Nova kategorija bez mapiranja se vidi u `agent_feeds.stats.unmapped`.
+- Veličine: čitaju se sa proizvodnih stranica (Magento `jsonConfig`), `config.size_crawl_per_run` po pokretanju (2 paralelna zahteva, pauza 250 ms), u privatnom bucketu `feed-cache`. Za pravu uslugu bolje je čitati ih iz Magento API-ja.
+- Zaštita: ulaz sa 0 proizvoda ili padom većim od 30% se ne objavljuje; ostaje poslednji ispravan feed, razlog ide u `agent_feeds.last_error`, a job pada (GitHub šalje email).
+- `.github/workflows/agent-feed.yml` radi svakog sata (secret `SUPABASE_SERVICE_ROLE_KEY`). Novi klijent = novi red u `agent_feeds`.
+- Naš pun feed je upisan i u `feeds`, pa ga Feed X-ray skenira svakog dana kao i klijentov („pre i posle“).
+
+Lokalno, bez Supabase-a:
+
+```bash
+node tools/agent-feed/build.mjs --source <url|fajl> --out-dir out/ [--crawl 40 --cache sizes.json]
+```
+
+Pažnja: pun feed menja `g:id` za proizvode sa veličinama (`54510` → `54510-7.5`, …), pa Google za njih kreće bez istorije. Zato prvo dopunski feed, pa tek onda pun.
+
 ## Testovi
 
 ```bash
