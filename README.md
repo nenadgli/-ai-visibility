@@ -102,6 +102,19 @@ node tools/agent-feed/build.mjs --source <url|fajl> --out-dir out/ [--crawl 40 -
 
 Pažnja: pun feed menja `g:id` za proizvode sa veličinama (`54510` → `54510-7.5`, …), pa Google za njih kreće bez istorije. Zato prvo dopunski feed, pa tek onda pun.
 
+## Ukrštanje (katalog × AI odgovori)
+
+Stranica **Ukrštanje** spaja katalog klijenta sa onim što AI odgovara, pretražuje, čita i tvrdi. Katalog (`catalog_products`) puni Agent Feed pri svakom objavljivanju: naš naziv, klijentov naziv, opis, cene, veličine.
+
+| Analiza | Funkcija | Šta otkriva |
+|---|---|---|
+| Upiti × katalog | `get_catalog_prompt_fit` | upiti gde klijent ima robu a AI ga ne pominje; traženi modeli koji postoje samo u opisu; preporuke za brendove koje klijent ne prodaje |
+| Fan-out × katalog | `get_catalog_fanout` | modeli koje AI sam traži ("Steve Madden Possession") i da li ih naziv proizvoda sadrži |
+| Stranice koje AI čita | `get_own_pages` | proizvod / kategorija / filter / PDF / info, po hostu (npr. javno indeksiran test server) |
+| Šta AI tvrdi da klijent prodaje | `get_ai_assortment_claims` | brendovi koje AI pogrešno pripisuje klijentu i brendovi klijenta koje AI ne pominje |
+
+Agent Feed iz opisa izvlači naziv modela kad ga naziv ne pominje ("Steve Madden - Ženske patike…" → "Steve Madden Possession-E - Ženske patike…"), jer AI i Google traže po modelu.
+
 ## Testovi
 
 ```bash

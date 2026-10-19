@@ -74,6 +74,18 @@ export function supabase() {
     async update(table, match, patch) {
       await ok(await fetch(`${url}/rest/v1/${table}?${match}`, { method: "PATCH", headers: { ...h, "content-type": "application/json", prefer: "return=minimal" }, body: JSON.stringify(patch) }), `izmena ${table}`);
     },
+    /** upsert u serijama; conflict = kolone primarnog ključa */
+    async upsert(table, rows, conflict) {
+      for (let i = 0; i < rows.length; i += 1000) {
+        await ok(await fetch(`${url}/rest/v1/${table}?on_conflict=${conflict}`, {
+          method: "POST", headers: { ...h, "content-type": "application/json", prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(rows.slice(i, i + 1000)),
+        }), `upsert ${table}`);
+      }
+    },
+    async remove(table, match) {
+      await ok(await fetch(`${url}/rest/v1/${table}?${match}`, { method: "DELETE", headers: { ...h, prefer: "return=minimal" } }), `brisanje iz ${table}`);
+    },
     async upload(bucket, path, body, contentType) {
       await ok(await fetch(`${url}/storage/v1/object/${bucket}/${path}`, {
         method: "POST", headers: { ...h, "content-type": contentType, "x-upsert": "true", "cache-control": "max-age=300" }, body,
