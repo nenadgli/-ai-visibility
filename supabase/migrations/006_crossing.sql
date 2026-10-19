@@ -20,9 +20,9 @@ create index on public.catalog_products(workspace_id, brand);
 alter table public.catalog_products enable row level security;
 create policy "auth_all" on public.catalog_products for all to authenticated using (true) with check (true);
 
--- Normalizacija za poređenje: mala slova, bez dijakritika i apostrofa, samo [a-z0-9&] i razmaci
+-- Normalizacija za poređenje: mala slova, bez dijakritika i apostrofa, samo [a-z0-9&] i razmaci; "Lyle & Scott" = "Lyle&Scott"
 create or replace function public._norm(t text) returns text language sql immutable as $$
-  select trim(regexp_replace(regexp_replace(translate(lower(coalesce(t, '')), 'čćžšđ''’', 'cczsd'), '[^a-z0-9&]+', ' ', 'g'), '\s+', ' ', 'g'));
+  select trim(regexp_replace(regexp_replace(regexp_replace(translate(lower(coalesce(t, '')), 'čćžšđ''’', 'cczsd'), '\s*&\s*', '&', 'g'), '[^a-z0-9&]+', ' ', 'g'), '\s+', ' ', 'g'));
 $$;
 
 alter table public.catalog_products add column ntitle text generated always as (public._norm(title)) stored;
