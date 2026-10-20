@@ -17,6 +17,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { BROWSER_UA, cdata, loadText, parseArgs, parseItems, parseMagentoSizes, supabase } from "../lib/feed.mjs";
 import { LEAF_TO_GOOGLE, TOP_TO_AGE_GROUP } from "./taxonomy.mjs";
@@ -57,8 +58,8 @@ async function fail(msg) {
 }
 
 // ---------------------------------------------------------------- ulaz + zaštita
-let parsed;
-try { parsed = parseItems(await loadText(cfg.source_url)); } catch (e) { await fail(`ulazni feed: ${e.message}`); }
+let parsed, sourceText;
+try { sourceText = await loadText(cfg.source_url); parsed = parseItems(sourceText); } catch (e) { await fail(`ulazni feed: ${e.message}`); }
 const items = parsed.items;
 if (!items.length) await fail("ulazni feed nema nijedan proizvod");
 if (cfg.last_items && items.length < cfg.last_items * MIN_RATIO) {
@@ -244,6 +245,8 @@ if (db) {
     })), "workspace_id,product_id");
     await db.remove("catalog_products", `workspace_id=eq.${cfg.workspace_id}&updated_at=lt.${encodeURIComponent(runAt)}`);
   } catch (e) { stats.catalog_error = e.message; console.error("Katalog nije upisan:", e.message); }
+  // originalni feed, takav kakav jeste (stranica "Originalni feed", migracija 010)
+  try { stats.source = await syncSource(); } catch (e) { stats.source_error = e.message; console.error("Originalni feed nije upisan:", e.message); }
   const now = new Date().toISOString();
   await db.update("agent_feeds", `id=eq.${cfg.id}`, { last_built_at: now, last_checked_at: now, last_items: items.length, last_error: null, stats });
   console.error("Objavljeno:", Object.keys(files).map((f) => db.publicUrl("feeds", `${cfg.token}/${f}`)).join("  "));
@@ -254,4 +257,48 @@ if (db) {
   if (args["cache"]) await writeFile(args["cache"], JSON.stringify(cache));
   await writeFile(`${dir}/stats.json`, JSON.stringify(stats, null, 2));
   console.error(`Upisano u ${dir}`);
+}
+
+// Svaki <item> iz ulaznog feeda doslovno u feed_source_items; upisuju se samo promenjeni (hash), nestali se brišu.
+// Vraća opis izvora za agent_feeds.stats.source: zaglavlje, veličina, popunjenost polja.
+async function syncSource() {
+  const fields = {};
+  for (const d of items) {
+    const seen = new Set();
+    for (const [tag, key] of d._order) {
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      const f = (fields[tag] ??= { present: 0, filled: 0 });
+      f.present++;
+      if (d[key] !== "") f.filled++;
+    }
+    if (d.extra_images.length) { const f = (fields["g:additional_image_link"] ??= { present: 0, filled: 0 }); f.present++; f.filled++; }
+  }
+  const first = sourceText.indexOf("<item>");
+  const source = { url: cfg.source_url, bytes: Buffer.byteLength(sourceText), items: items.length, head: sourceText.slice(0, first < 0 ? 2000 : Math.min(first, 4000)), fields, fetched_at: new Date().toISOString() };
+
+  const old = new Map();
+  for (let off = 0; ; off += 1000) {
+    const page = await db.select("feed_source_items", `select=product_id,hash&feed_id=eq.${cfg.id}&order=product_id&limit=1000&offset=${off}`);
+    for (const r of page) old.set(r.product_id, r.hash);
+    if (page.length < 1000) break;
+  }
+  const rows = [], seen = new Set();
+  items.forEach((d, pos) => {
+    if (!d.id || seen.has(d.id)) return;
+    seen.add(d.id);
+    const hash = createHash("sha1").update(`${pos}\n${d._raw}`).digest("hex");
+    if (old.get(d.id) === hash) return;
+    rows.push({ feed_id: cfg.id, workspace_id: cfg.workspace_id, product_id: d.id, pos, title: d.title || null, brand: d.brand || null, size: d.size || null,
+      product_type: d.product_type || null, price: d.price || null, sale_price: d.sale_price || null, availability: d.availability || null,
+      raw: d._raw, hash, updated_at: source.fetched_at });
+  });
+  await db.upsert("feed_source_items", rows, "feed_id,product_id");
+  const gone = [...old.keys()].filter((id) => !seen.has(id));
+  for (let i = 0; i < gone.length; i += 200) {
+    await db.remove("feed_source_items", `feed_id=eq.${cfg.id}&product_id=in.(${gone.slice(i, i + 200).map((x) => `"${x.replace(/"/g, '\\"')}"`).join(",")})`);
+  }
+  Object.assign(source, { changed: rows.length, removed: gone.length });
+  console.error(`Originalni feed: ${rows.length} izmenjenih, ${gone.length} uklonjenih`);
+  return source;
 }
