@@ -213,3 +213,18 @@ code { font-size: 12px; background: var(--sunk); padding: 1px 5px; border-radius
 .xr-file { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr) auto; gap: 8px 14px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); }
 .xr-file code { word-break: break-all; }
 @media (max-width: 860px) { .xr-file { grid-template-columns: 1fr; justify-items: start; } }
+
+/* ---------- feed pre/posle ---------- */
+.fc-sz { display: flex; flex-wrap: wrap; gap: 4px; }
+.fc-sz span { font-size: 12px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-s); white-space: nowrap; }
+.fc-sz span.miss { border-color: var(--neg); color: var(--neg); }
+.fc-detail { display: flex; flex-direction: column; gap: 10px; }
+.fc-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 12px; }
+.fc-cols section { min-width: 0; }
+.fc-cols h3 { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.fc-xml { margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); font: 12px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-x: auto; }
+.fc-xml mark { border-radius: 3px; padding: 0 2px; }
+.fc-xml mark.bad { background: color-mix(in srgb, var(--neg) 16%, transparent); color: var(--neg); }
+.fc-xml mark.good { background: color-mix(in srgb, var(--pos) 16%, transparent); color: var(--pos); }
+.fc-t { color: var(--faint); }
+.fc-cm { color: var(--muted); font-style: italic; }

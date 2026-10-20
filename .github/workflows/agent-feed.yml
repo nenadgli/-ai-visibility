@@ -1,11 +1,10 @@
 name: Agent Feed
 
-# Svakog sata pravi ispravljene feedove (tabela agent_feeds) i objavljuje ih u Supabase Storage (bucket "feeds").
+# Pravi ispravljene feedove (tabela agent_feeds) i objavljuje ih u Supabase Storage (bucket "feeds").
+# Pokreće ga Supabase pg_cron svakog sata u :41 (migracija 007); GitHub "schedule" je preskakao pokretanja.
 # Ako je ulazni feed pokvaren, ništa se ne objavljuje (ostaje poslednji ispravan) i job pada → GitHub šalje email.
 # Secrets: SUPABASE_SERVICE_ROLE_KEY.
 on:
-  schedule:
-    - cron: "41 * * * *"
   workflow_dispatch:
 
 permissions:
