@@ -48,11 +48,13 @@ export default function Crossing() {
   const [open, setOpen] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
   const own = brands.find((b) => b.is_own)?.name ?? "klijent";
 
   useEffect(() => {
     if (!ws) return;
     setLoading(true);
+    setErr(null);
     const a = { p_ws: ws.id, p_run: runId, p_market: market };
     Promise.all([
       rpc<Fit>("get_catalog_prompt_fit", a),
@@ -65,7 +67,7 @@ export default function Crossing() {
       setFit(f); setPages(p); setFan(q); setClaims(c);
       setCatalogCount(cnt.count ?? null);
       setModelsAdded((af.data ?? []).reduce((s: number, r: any) => s + (r.stats?.models_added ?? 0), 0) || null);
-    }).finally(() => setLoading(false));
+    }).catch((e) => setErr(e.message)).finally(() => setLoading(false));
   }, [ws, runId, market]);
 
   const sortedFit = useMemo(() => [...fit].sort((x, y) => VERDICT[x.verdict].order - VERDICT[y.verdict].order || (x.own_rate ?? 0) - (y.own_rate ?? 0)), [fit]);
@@ -104,7 +106,9 @@ export default function Crossing() {
         <Filters />
       </div>
 
-      {catalogCount === 0 ? (
+      {err ? (
+        <p className="panel err">Podaci za ukrštanje nisu učitani: {err}</p>
+      ) : catalogCount === 0 ? (
         <NoData>Katalog još nije učitan. Puni ga Agent Feed pri svakom objavljivanju (Actions → Agent Feed → Run workflow).</NoData>
       ) : !fit.length ? <NoData /> : (
         <div className="stack">
