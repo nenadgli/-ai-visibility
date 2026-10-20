@@ -14,6 +14,7 @@ import Runs from "./pages/Runs";
 import Settings from "./pages/Settings";
 import FeedXray from "./pages/FeedXray";
 import Crossing from "./pages/Crossing";
+import FeedCompare from "./pages/FeedCompare";
 
 function Mark() {
   return (
@@ -43,6 +44,7 @@ function Shell() {
           <NavLink to="/izvori">Izvori</NavLink>
           <NavLink to="/pretrage">Pretrage</NavLink>
           <NavLink to="/feed">Feed X-ray</NavLink>
+          <NavLink to="/feed-poredjenje">Feed pre/posle</NavLink>
           <NavLink to="/ukrstanje">Ukrštanje</NavLink>
           <NavLink to="/upiti">Upiti</NavLink>
           <NavLink to="/pokretanja">Pokretanja</NavLink>
@@ -63,6 +65,7 @@ function Shell() {
             <Route path="/izvori" element={<Sources />} />
             <Route path="/pretrage" element={<Fanout />} />
             <Route path="/feed" element={<FeedXray />} />
+            <Route path="/feed-poredjenje" element={<FeedCompare />} />
             <Route path="/ukrstanje" element={<Crossing />} />
             <Route path="/upiti" element={<Prompts />} />
             <Route path="/pokretanja" element={<Runs />} />

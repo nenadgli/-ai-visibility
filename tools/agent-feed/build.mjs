@@ -237,6 +237,10 @@ if (db) {
       workspace_id: cfg.workspace_id, product_id: d.id, title: d._title, orig_title: d.title, description: (d.description || "").slice(0, 600),
       brand: d.brand || null, product_type: d._pt || null, link: d.link || null, price: price(d.price), sale_price: price(d.sale_price),
       sizes: cache[d.id]?.s ?? (d.size ? [d.size] : []), updated_at: runAt,
+      // za stranicu "Feed pre/posle" (migracija 008)
+      feed_size: d.size || null, feed_gpc: d.google_product_category || null, gpc: d._gpc || null,
+      orig_product_type: d.product_type || null, age_group: d._age || null, image_link: d.image_link || null,
+      sizes_source: cache[d.id] ? "site" : "feed",
     })), "workspace_id,product_id");
     await db.remove("catalog_products", `workspace_id=eq.${cfg.workspace_id}&updated_at=lt.${encodeURIComponent(runAt)}`);
   } catch (e) { stats.catalog_error = e.message; console.error("Katalog nije upisan:", e.message); }
