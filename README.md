@@ -75,7 +75,7 @@ node tools/feed-xray/scan.mjs \
   --push --feed-id <id iz tabele feeds>
 ```
 
-**Dnevno skeniranje:** `.github/workflows/feed-xray.yml` svakog jutra (04:17 UTC) pokreće `scan.mjs --all`, koji skenira sve feedove iz tabele `feeds`. Potreban je GitHub secret `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys). Ručno pokretanje: Actions → Feed X-ray → Run workflow. Novi klijent = novi red u `feeds`, ništa drugo.
+**Dnevno skeniranje:** `.github/workflows/feed-xray.yml` svakog jutra (04:17 UTC, okida ga Supabase pg_cron) pokreće `scan.mjs --all`, koji skenira sve feedove iz tabele `feeds`. Potreban je GitHub secret `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys). Ručno pokretanje: Actions → Feed X-ray → Run workflow. Novi klijent = novi red u `feeds`, ništa drugo.
 
 Bez `--push` snimak ide na stdout (ili u `--out fajl.json`). `--site` uključuje proveru uzorka proizvodnih stranica (veličine na sajtu vs. feed, Magento `jsonConfig`) i test pristupa AI botova (User-Agent sa naše IP adrese, rezultat treba potvrditi u Cloudflareu). Svaki snimak se čuva, pa se kasnije može pratiti promena kroz vreme.
 
@@ -92,6 +92,10 @@ Od klijentovog feeda pravimo ispravljen feed i objavljujemo ga u Supabase Storag
 - Veličine: čitaju se sa proizvodnih stranica (Magento `jsonConfig`), `config.size_crawl_per_run` po pokretanju (2 paralelna zahteva, pauza 250 ms), u privatnom bucketu `feed-cache`. Za pravu uslugu bolje je čitati ih iz Magento API-ja.
 - Zaštita: ulaz sa 0 proizvoda ili padom većim od 30% se ne objavljuje; ostaje poslednji ispravan feed, razlog ide u `agent_feeds.last_error`, a job pada (GitHub šalje email).
 - `.github/workflows/agent-feed.yml` radi svakog sata (secret `SUPABASE_SERVICE_ROLE_KEY`). Novi klijent = novi red u `agent_feeds`.
+
+## Zakazivanje
+
+GitHub `schedule` je preskakao i kasnio sa pokretanjima, pa workflowe pokreće **Supabase pg_cron** preko GitHub API-ja (`supabase/migrations/007_cron_dispatch.sql`): Agent Feed svakog sata u :41, Feed X-ray u 04:17 UTC. Token (fine-grained, samo ovaj repo, „Actions: Read and write“) je u Supabase Vaultu kao `github_actions_token`. Provera: `select * from cron.job_run_details order by start_time desc limit 5;` i `select status_code, created from net._http_response order by created desc limit 5;` (204 = pokrenuto).
 - Naš pun feed je upisan i u `feeds`, pa ga Feed X-ray skenira svakog dana kao i klijentov („pre i posle“).
 
 Lokalno, bez Supabase-a:
