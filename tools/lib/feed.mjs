@@ -38,7 +38,7 @@ export function parseItems(xml) {
   const items = [];
   const fieldNames = new Set();
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
-    const it = { extra_images: [], _order: [] };
+    const it = { extra_images: [], _order: [], _raw: m[0] };
     for (const f of m[1].matchAll(/<((?:g:)?[a-z_0-9]+)>([\s\S]*?)<\/\1>/g)) {
       const key = f[1].replace(/^g:/, "");
       const val = decode(f[2]);
