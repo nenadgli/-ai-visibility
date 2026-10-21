@@ -10,6 +10,8 @@
 // Promenljive (wrangler.toml → [vars]):
 //   LD_BASE  javna adresa delova, npr. https://<projekat>.supabase.co/storage/v1/object/public/feeds/<token>/ld
 //   ORIGIN   samo za probu: odakle se uzima stranica (npr. https://www.fashionandfriends.com); na pravom sajtu prazno
+//   PROBA    "1" = probna kopija na tuđoj adresi (npr. workers.dev, da je otvori ChatGPT): radi samo na stranicama
+//            za koje imamo karton, dodaje traku "probna kopija" i zabranjuje indeksiranje (noindex)
 
 const MARK = "data-agent-feed"; // oznaka na ubačenom kartonu, da se vidi odakle je
 
@@ -27,9 +29,10 @@ export default {
     } catch (e) {
       console.log("karton nije učitan:", e && e.message);
     }
-    if (!card) return page;
+    if (!card) return env.PROBA === "1" ? new Response("Probna kopija radi samo za stranice proizvoda iz feeda.", { status: 404 }) : page;
 
-    return replaceProductCard(page, card);
+    const out = replaceProductCard(page, card);
+    return env.PROBA === "1" ? markAsTest(out, upstream.url) : out;
   },
 };
 
@@ -81,4 +84,22 @@ function replaceProductCard(page, card) {
   out.headers.set("x-agent-feed-ld", "1");
   out.headers.delete("content-length");
   return out;
+}
+
+// Probna kopija: vidljiva traka sa linkom na original, bez indeksiranja, relativni linkovi vode na pravi sajt
+function markAsTest(res, originalUrl) {
+  const origin = new URL(originalUrl).origin;
+  const out = new HTMLRewriter()
+    .on("head", { element(el) { el.prepend(`<base href="${origin}/"><meta name="robots" content="noindex, nofollow">`, { html: true }); } })
+    .on("body", {
+      element(el) {
+        el.prepend(`<div style="position:sticky;top:0;z-index:99999;background:#1c4fa8;color:#fff;font:14px/1.4 system-ui,sans-serif;padding:8px 16px">
+Probna kopija za proveru podataka koje čitaju AI asistenti (AI Vidljivost). Ovo nije prodavnica.
+Original: <a style="color:#fff;text-decoration:underline" href="${originalUrl}">${originalUrl}</a></div>`, { html: true });
+      },
+    })
+    .transform(res);
+  const r = new Response(out.body, out);
+  r.headers.set("x-robots-tag", "noindex, nofollow");
+  return r;
 }

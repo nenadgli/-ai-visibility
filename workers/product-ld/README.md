@@ -44,6 +44,14 @@ Gašenje: obrisati rutu u Cloudflare-u. Sajt odmah radi kao pre.
 
 Trošak: Workers Free do 100.000 zahteva dnevno; Workers Paid $5 mesečno za 10 miliona.
 
+## Proba sa ChatGPT-om pre postavljanja na sajt klijenta
+
+Worker se postavi na sopstveni besplatni Cloudflare nalog (adresa `product-ld.<nalog>.workers.dev`) sa
+`ORIGIN = "https://www.fashionandfriends.com"` i `PROBA = "1"`. U tom režimu radi samo na stranicama za koje imamo karton,
+na vrhu prikazuje traku „Probna kopija… nije prodavnica“ sa linkom na original i zabranjuje indeksiranje
+(`noindex`, `X-Robots-Tag`). ChatGPT-u se da link probne kopije i pita isto što i za originalnu stranicu.
+Posle probe Worker se obriše.
+
 ## Lokalna proba
 
 ```sh
