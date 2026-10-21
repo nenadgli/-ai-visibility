@@ -22,12 +22,21 @@ export default {
     // Probna kopija: stranicu uzimamo kao pregledač. Inače bi Cloudflare klijenta odbio ChatGPT-ov User-Agent (403)
     // i proba ne bi pokazala da li AI čita karton. Na pravom sajtu Worker radi tek posle Cloudflare zaštite,
     // pa tamo AI botovi moraju biti propušteni u podešavanjima.
+    // Nov zahtev bez zaglavlja posetioca: ChatGPT šalje i potpis (Signature, Signature-Agent) po kome ga Cloudflare prepozna.
     if (env.PROBA === "1") {
-      const h = new Headers(upstream.headers);
-      h.set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
-      upstream = new Request(upstream, { headers: h });
+      upstream = new Request(upstream.url, {
+        headers: {
+          "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "sr-RS,sr;q=0.9,en;q=0.8",
+        },
+      });
     }
     const page = await fetch(upstream);
+    if (env.PROBA === "1") console.log(`proba: ${request.headers.get("user-agent")} → izvor ${page.status}`);
+    if (env.PROBA === "1" && page.status !== 200) {
+      return new Response(`Probna kopija: originalni sajt je vratio HTTP ${page.status} za ${upstream.url}`, { status: 502, headers: { "x-origin-status": String(page.status) } });
+    }
 
     if (request.method !== "GET" || page.status !== 200 || !(page.headers.get("content-type") || "").includes("text/html")) return page;
 
