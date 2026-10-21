@@ -1,0 +1,10 @@
+# Cloudflare Worker za kartone proizvoda (vidi README.md). Ruta se dodaje na sajtu klijenta.
+name = "product-ld"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# routes = [{ pattern = "www.fashionandfriends.com/rs/*", zone_name = "fashionandfriends.com" }]
+
+[vars]
+LD_BASE = "https://prfcnhlunpnewankxhdn.supabase.co/storage/v1/object/public/feeds/e76b23aff3550118fb/ld"
+ORIGIN = ""

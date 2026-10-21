@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Agent Feed: od klijentovog Magento feeda pravi ispravljen feed za Google, Metu i AI agente.
 //
-// Dva izlaza:
+// Izlazi:
 //   google-supplemental.xml.gz  dopunski feed (samo g:id + ispravke): google_product_category, title,
 //                               product_type, age_group. Klijentov feed ostaje glavni → nula rizika.
 //   google.xml.gz               pun feed: sve ispravke + jedan red po veličini (item_group_id) za proizvode
 //                               čije su veličine u kešu (čitaju se sa proizvodnih stranica, malo po malo).
+//   ld/<xx>.json                kartoni proizvoda (JSON-LD) za Cloudflare Worker workers/product-ld, 256 delova.
 // Uz to puni tabelu catalog_products (katalog za ukrštanje sa AI odgovorima, migracija 006).
 //
 //   Lokalno:  node tools/agent-feed/build.mjs --source <url|fajl> [--site <url>] --out-dir <dir> [--crawl 0]
@@ -21,6 +22,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { BROWSER_UA, cdata, loadText, parseArgs, parseItems, parseMagentoSizes, supabase } from "../lib/feed.mjs";
 import { LEAF_TO_GOOGLE, TOP_TO_AGE_GROUP } from "./taxonomy.mjs";
+import { shards } from "./ld.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const MIN_RATIO = 0.7;
@@ -218,6 +220,10 @@ const files = {
   "google.xml.gz": gzipSync(full.join(""), { level: 9 }),
   "google-supplemental.xml.gz": gzipSync(supp.join(""), { level: 9 }),
 };
+// kartoni proizvoda (JSON-LD) za Cloudflare Worker, po delovima (ld.mjs)
+const ldShards = Object.fromEntries(Object.entries(shards(items, cache)).map(([k, v]) => [k, JSON.stringify(v)]));
+stats.ld = { cards: Object.values(ldShards).reduce((n, s) => n + Object.keys(JSON.parse(s)).length, 0), shards: Object.keys(ldShards).length };
+
 Object.assign(stats, { rows, variant_products: variantProducts, sizes_cached: Object.keys(cache).length, crawl, unmapped_count: items.length - stats.gpc_mapped });
 const top = Object.entries(stats.unmapped).sort((a, b) => b[1] - a[1]).slice(0, 10);
 stats.unmapped = Object.fromEntries(top);
@@ -229,6 +235,21 @@ if (top.length) console.error("Bez mapiranja:", top.map(([k, v]) => `${k} (${v})
 if (db) {
   for (const [name, body] of Object.entries(files)) await db.upload("feeds", `${cfg.token}/${name}`, body, "application/gzip");
   await db.upload("feed-cache", cachePath, Buffer.from(JSON.stringify(cache)), "application/json");
+  // kartoni: šalju se samo delovi koji su se promenili (spisak hash-eva u privatnom kešu)
+  try {
+    const manPath = `${cfg.token}/ld-manifest.json`;
+    const prev = JSON.parse((await db.download("feed-cache", manPath))?.toString("utf8") || "{}");
+    const man = {};
+    let uploaded = 0;
+    for (const [k, body] of Object.entries(ldShards)) {
+      man[k] = createHash("sha1").update(body).digest("hex");
+      if (prev[k] === man[k]) continue;
+      await db.upload("feeds", `${cfg.token}/ld/${k}.json`, Buffer.from(body), "application/json");
+      uploaded++;
+    }
+    await db.upload("feed-cache", manPath, Buffer.from(JSON.stringify(man)), "application/json");
+    stats.ld.uploaded = uploaded;
+  } catch (e) { stats.ld.error = e.message; console.error("Kartoni nisu objavljeni:", e.message); }
   // katalog za ukrštanje sa AI odgovorima: upsert svih proizvoda, pa brisanje onih kojih više nema.
   // Greška ovde ne poništava objavljen feed; beleži se u stats.catalog_error.
   try {
@@ -254,6 +275,8 @@ if (db) {
   const dir = args["out-dir"] ?? ".";
   await mkdir(dir, { recursive: true });
   for (const [name, body] of Object.entries(files)) await writeFile(`${dir}/${name}`, body);
+  await mkdir(`${dir}/ld`, { recursive: true });
+  for (const [k, body] of Object.entries(ldShards)) await writeFile(`${dir}/ld/${k}.json`, body);
   if (args["cache"]) await writeFile(args["cache"], JSON.stringify(cache));
   await writeFile(`${dir}/stats.json`, JSON.stringify(stats, null, 2));
   console.error(`Upisano u ${dir}`);
