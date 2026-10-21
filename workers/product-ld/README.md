@@ -5,6 +5,21 @@ pun naziv sa modelom, sve veličine sa sajta (`ProductGroup` + varijanta po veli
 Kupac vidi istu stranicu; menja se samo karton koji čitaju Google, ChatGPT, Perplexity i ostali. Stranica je ista za sve
 posetioce, pa ovo nije cloaking.
 
+## Šta je u kartonu
+
+- **Proizvod:** pun naziv sa modelom, brend, boja, pol, slike, sve veličine sa sajta (`ProductGroup` + varijante).
+- **Akcija:** precrtana cena (`StrikethroughPrice`) i opis ponude, npr. „Akcija -40%: 5.694 RSD umesto 9.490 RSD“.
+- **Dostava i povrat** iz `agent_feeds.config.policy` (cena i rok dostave, dani za povrat, ko plaća povratnu poštarinu):
+  ```json
+  { "country": "RS", "shipping": { "price": 350, "handling_days": [0, 1], "transit_days": [2, 4] },
+    "returns": { "days": 14, "customer_pays_shipping": true } }
+  ```
+- **Česta pitanja:** `agent_feeds.config.faq_url` → `FAQPage` karton na toj istoj stranici (pitanja su tamo vidljiva,
+  kako Google traži). Agent Feed ih čita sa stranice svakog sata.
+
+Podaci o dostavi i povratu moraju biti prepisani sa sajta klijenta (stranice „Naručivanje i plaćanje“ i „Odustanak od kupovine“),
+nikad pretpostavljeni.
+
 ## Kako radi
 
 1. Agent Feed (`tools/agent-feed/build.mjs` + `ld.mjs`) svakog sata pravi kartone i objavljuje ih u 256 delova:

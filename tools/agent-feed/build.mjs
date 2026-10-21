@@ -9,7 +9,7 @@
 //   ld/<xx>.json                kartoni proizvoda (JSON-LD) za Cloudflare Worker workers/product-ld, 256 delova.
 // Uz to puni tabelu catalog_products (katalog za ukrštanje sa AI odgovorima, migracija 006).
 //
-//   Lokalno:  node tools/agent-feed/build.mjs --source <url|fajl> [--site <url>] --out-dir <dir> [--crawl 0]
+//   Lokalno:  node tools/agent-feed/build.mjs --source <url|fajl> [--site <url>] --out-dir <dir> [--crawl 0] [--config config.json]
 //   Sve:      node tools/agent-feed/build.mjs --all    (tabela agent_feeds → Supabase Storage, bucket "feeds")
 //
 // Zaštita: ako ulaz ima 0 proizvoda ili manje od 70% prošlog broja, ništa se ne objavljuje
@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { BROWSER_UA, cdata, loadText, parseArgs, parseItems, parseMagentoSizes, supabase } from "../lib/feed.mjs";
 import { LEAF_TO_GOOGLE, TOP_TO_AGE_GROUP } from "./taxonomy.mjs";
-import { shards } from "./ld.mjs";
+import { faqCard, shards } from "./ld.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const MIN_RATIO = 0.7;
@@ -46,7 +46,8 @@ if (args.id) {
   [cfg] = await db.select("agent_feeds", `select=*&id=eq.${args.id}`);
   if (!cfg) throw new Error(`agent_feeds ${args.id} ne postoji`);
 } else if (args.source) {
-  cfg = { source_url: args.source, site_url: args.site ?? null, token: "local", last_items: null, config: { size_crawl_per_run: Number(args.crawl ?? 0) } };
+  cfg = { source_url: args.source, site_url: args.site ?? null, token: "local", last_items: null,
+    config: { size_crawl_per_run: Number(args.crawl ?? 0), ...(args.config ? JSON.parse(await readFile(args.config, "utf8")) : {}) } };
 } else {
   console.error("Upotreba: build.mjs --source <url|fajl> [--site <url>] --out-dir <dir> [--crawl N]  |  --id <agent_feed>  |  --all");
   process.exit(1);
@@ -221,8 +222,18 @@ const files = {
   "google-supplemental.xml.gz": gzipSync(supp.join(""), { level: 9 }),
 };
 // kartoni proizvoda (JSON-LD) za Cloudflare Worker, po delovima (ld.mjs)
-const ldShards = Object.fromEntries(Object.entries(shards(items, cache)).map(([k, v]) => [k, JSON.stringify(v)]));
-stats.ld = { cards: Object.values(ldShards).reduce((n, s) => n + Object.keys(JSON.parse(s)).length, 0), shards: Object.keys(ldShards).length };
+// config.policy: dostava i povrat u svakoj ponudi; config.faq_url: stranica čestih pitanja → FAQPage
+const ldExtra = {};
+let faqCount = 0;
+if (cfg.config?.faq_url) {
+  try {
+    const faq = faqCard(await loadText(cfg.config.faq_url), cfg.config.faq_url);
+    if (faq) { ldExtra[cfg.config.faq_url] = faq; faqCount = faq.mainEntity.length; }
+    else console.error("Česta pitanja: nijedno pitanje nije prepoznato na", cfg.config.faq_url);
+  } catch (e) { console.error("Česta pitanja nisu učitana:", e.message); }
+}
+const ldShards = Object.fromEntries(Object.entries(shards(items, cache, cfg.config?.policy, ldExtra)).map(([k, v]) => [k, JSON.stringify(v)]));
+stats.ld = { cards: Object.values(ldShards).reduce((n, s) => n + Object.keys(JSON.parse(s)).length, 0), shards: Object.keys(ldShards).length, faq: faqCount };
 
 Object.assign(stats, { rows, variant_products: variantProducts, sizes_cached: Object.keys(cache).length, crawl, unmapped_count: items.length - stats.gpc_mapped });
 const top = Object.entries(stats.unmapped).sort((a, b) => b[1] - a[1]).slice(0, 10);
