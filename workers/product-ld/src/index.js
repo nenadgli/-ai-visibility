@@ -18,7 +18,15 @@ const MARK = "data-agent-feed"; // oznaka na ubačenom kartonu, da se vidi odakl
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const upstream = env.ORIGIN ? new Request(new URL(url.pathname + url.search, env.ORIGIN), request) : request;
+    let upstream = env.ORIGIN ? new Request(new URL(url.pathname + url.search, env.ORIGIN), request) : request;
+    // Probna kopija: stranicu uzimamo kao pregledač. Inače bi Cloudflare klijenta odbio ChatGPT-ov User-Agent (403)
+    // i proba ne bi pokazala da li AI čita karton. Na pravom sajtu Worker radi tek posle Cloudflare zaštite,
+    // pa tamo AI botovi moraju biti propušteni u podešavanjima.
+    if (env.PROBA === "1") {
+      const h = new Headers(upstream.headers);
+      h.set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
+      upstream = new Request(upstream, { headers: h });
+    }
     const page = await fetch(upstream);
 
     if (request.method !== "GET" || page.status !== 200 || !(page.headers.get("content-type") || "").includes("text/html")) return page;
